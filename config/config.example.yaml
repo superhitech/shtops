@@ -1,0 +1,29 @@
+# SHTops Configuration
+# Copy this file to config.yaml and fill in your values
+
+librenms:
+  url: "https://librenms.example.com"
+  api_key: "your-api-key-here"
+
+proxmox:
+  url: "https://proxmox.example.com:8006"
+  user: "api@pam"
+  token_name: "shtops"
+  token_value: "your-token-here"
+
+freepbx:
+  url: "https://pbx.example.com"
+  api_key: "your-api-key-here"
+
+unifi:
+  url: "https://unifi.example.com:8443"
+  username: "shtops"
+  password: "your-password-here"
+
+hudu:
+  url: "https://hudu.example.com"
+  api_key: "your-api-key-here"
+
+cache:
+  directory: "./cache"
+  default_ttl_seconds: 300
