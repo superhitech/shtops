@@ -1,7 +1,7 @@
 """FreePBX Collector
 
 Collects PBX status, extensions, trunks, queues, active calls,
-and system health from FreePBX.
+and system health from FreePBX using GraphQL API.
 """
 
 import json
@@ -42,7 +42,7 @@ def ensure_cache_dir(cache_dir: str) -> Path:
 
 def collect_freepbx_data(client: FreePBXClient) -> Dict[str, Any]:
     """
-    Collect all relevant data from FreePBX.
+    Collect all relevant data from FreePBX using GraphQL.
     
     Args:
         client: Initialized FreePBX client
@@ -57,6 +57,9 @@ def collect_freepbx_data(client: FreePBXClient) -> Dict[str, Any]:
         'system_info': {},
         'extensions': [],
         'trunks': [],
+        'queues': [],
+        'ivrs': [],
+        'ring_groups': [],
         'active_calls': []
     }
     
@@ -65,7 +68,10 @@ def collect_freepbx_data(client: FreePBXClient) -> Dict[str, Any]:
     try:
         system_info = client.get_asterisk_info()
         data['system_info'] = system_info
-        print(f"    System information collected")
+        if system_info.get('version'):
+            print(f"    Asterisk version: {system_info['version']}")
+        else:
+            print(f"    System information collected")
     except Exception as e:
         print(f"    Warning: Could not fetch system info: {e}")
     
@@ -86,6 +92,33 @@ def collect_freepbx_data(client: FreePBXClient) -> Dict[str, Any]:
         print(f"    Found {len(trunks)} trunks")
     except Exception as e:
         print(f"    Warning: Could not fetch trunks: {e}")
+    
+    # Get queues
+    print("  - Fetching queues...")
+    try:
+        queues = client.get_queues()
+        data['queues'] = queues
+        print(f"    Found {len(queues)} queues")
+    except Exception as e:
+        print(f"    Warning: Could not fetch queues: {e}")
+    
+    # Get IVRs
+    print("  - Fetching IVR menus...")
+    try:
+        ivrs = client.get_ivrs()
+        data['ivrs'] = ivrs
+        print(f"    Found {len(ivrs)} IVR menus")
+    except Exception as e:
+        print(f"    Warning: Could not fetch IVRs: {e}")
+    
+    # Get ring groups
+    print("  - Fetching ring groups...")
+    try:
+        ring_groups = client.get_ring_groups()
+        data['ring_groups'] = ring_groups
+        print(f"    Found {len(ring_groups)} ring groups")
+    except Exception as e:
+        print(f"    Warning: Could not fetch ring groups: {e}")
     
     # Get active calls
     print("  - Fetching active calls...")
@@ -118,9 +151,8 @@ def print_summary(data: Dict[str, Any]) -> None:
     
     # System info
     system_info = data.get('system_info', {})
-    if system_info:
-        asterisk_version = system_info.get('Asterisk Version', 'Unknown')
-        print(f"\nAsterisk Version: {asterisk_version}")
+    if system_info and system_info.get('version'):
+        print(f"\nAsterisk Version: {system_info['version']}")
     
     # Extensions
     extensions = data.get('extensions', [])
@@ -130,15 +162,29 @@ def print_summary(data: Dict[str, Any]) -> None:
     trunks = data.get('trunks', [])
     print(f"Trunks: {len(trunks)}")
     
+    # Queues
+    queues = data.get('queues', [])
+    print(f"Queues: {len(queues)}")
+    
+    # IVRs
+    ivrs = data.get('ivrs', [])
+    print(f"IVR Menus: {len(ivrs)}")
+    
+    # Ring Groups
+    ring_groups = data.get('ring_groups', [])
+    print(f"Ring Groups: {len(ring_groups)}")
+    
     # Active calls
     active_calls = data.get('active_calls', [])
     print(f"Active Calls: {len(active_calls)}")
     if active_calls:
-        print("  Current Calls:")
+        print("\n  Current Calls:")
         for call in active_calls[:3]:
-            src = call.get('source', 'Unknown')
-            dst = call.get('destination', 'Unknown')
-            print(f"    - {src} → {dst}")
+            caller = call.get('caller', {})
+            connected = call.get('connected', {})
+            caller_num = caller.get('number', 'Unknown')
+            connected_num = connected.get('number', 'Unknown')
+            print(f"    - {caller_num} → {connected_num}")
         if len(active_calls) > 3:
             print(f"    ... and {len(active_calls) - 3} more")
     
@@ -147,7 +193,7 @@ def print_summary(data: Dict[str, Any]) -> None:
 
 def main():
     """Main collector entry point."""
-    print("FreePBX Collector")
+    print("FreePBX Collector (GraphQL API)")
     print("="*60)
     
     try:
@@ -167,6 +213,7 @@ def main():
         
         # Initialize client
         print(f"\nConnecting to FreePBX at {url}...")
+        print("Using GraphQL API with OAuth2 authentication...")
         client = FreePBXClient(
             url=url,
             client_id=client_id,
@@ -175,9 +222,10 @@ def main():
         )
         
         # Test connection
+        print("Testing connection...")
         try:
             if not client.test_connection():
-                raise ConnectionError("Failed to connect to FreePBX API")
+                raise ConnectionError("Failed to connect to FreePBX GraphQL API")
         except Exception as e:
             print(f"Connection test failed: {e}")
             import traceback
