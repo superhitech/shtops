@@ -16,6 +16,11 @@ freepbx:
   client_id: "21be855b92945b1d9e7f6d79af194140d958c6e15ca2a87c09baf2da965b94ff"
   client_secret: "486dab98eb72a72ab83596ffb9e5ffcf"
   verify_ssl: false
+  # AMI Configuration (Asterisk Manager Interface)
+  ami_host: "192.168.5.24"  # FreePBX server IP (pbx.super-ht.com)
+  ami_port: 5038
+  ami_username: "3pXw6N7PhSVI"
+  ami_password: "Ep6CvZpiPpUr"
 
 unifi:
   url: "https://unifi.example.com:8443"

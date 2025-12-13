@@ -1,7 +1,7 @@
 """FreePBX Collector
 
 Collects PBX status, extensions, trunks, queues, active calls,
-and system health from FreePBX using GraphQL API.
+and system health from FreePBX using AMI (Asterisk Manager Interface).
 """
 
 import json
@@ -42,7 +42,7 @@ def ensure_cache_dir(cache_dir: str) -> Path:
 
 def collect_freepbx_data(client: FreePBXClient) -> Dict[str, Any]:
     """
-    Collect all relevant data from FreePBX using GraphQL.
+    Collect all relevant data from FreePBX using AMI.
     
     Args:
         client: Initialized FreePBX client
@@ -50,7 +50,7 @@ def collect_freepbx_data(client: FreePBXClient) -> Dict[str, Any]:
     Returns:
         Dictionary with collected data
     """
-    print("Collecting FreePBX data...")
+    print("Collecting FreePBX data via AMI...")
     
     data = {
         'collected_at': datetime.now(timezone.utc).isoformat().replace('+00:00', 'Z'),
@@ -58,8 +58,6 @@ def collect_freepbx_data(client: FreePBXClient) -> Dict[str, Any]:
         'extensions': [],
         'trunks': [],
         'queues': [],
-        'ivrs': [],
-        'ring_groups': [],
         'active_calls': []
     }
     
@@ -69,192 +67,147 @@ def collect_freepbx_data(client: FreePBXClient) -> Dict[str, Any]:
         system_info = client.get_asterisk_info()
         data['system_info'] = system_info
         if system_info.get('version'):
-            print(f"    Asterisk version: {system_info['version']}")
+            print(f"    ✓ {system_info['version'][:80]}")
         else:
-            print(f"    System information collected")
+            print(f"    ✓ System information collected")
     except Exception as e:
-        print(f"    Warning: Could not fetch system info: {e}")
+        print(f"    ✗ Warning: Could not fetch system info: {e}")
     
     # Get extensions
     print("  - Fetching extensions...")
     try:
         extensions = client.get_extensions()
         data['extensions'] = extensions
-        print(f"    Found {len(extensions)} extensions")
+        print(f"    ✓ Found {len(extensions)} extensions")
+        
+        # Show sample
+        if extensions:
+            online = [e for e in extensions if 'Avail' in e.get('status', '')]
+            print(f"      {len(online)} online, {len(extensions) - len(online)} offline/unavailable")
     except Exception as e:
-        print(f"    Warning: Could not fetch extensions: {e}")
+        print(f"    ✗ Warning: Could not fetch extensions: {e}")
     
     # Get trunks
     print("  - Fetching trunks...")
     try:
         trunks = client.get_trunks()
         data['trunks'] = trunks
-        print(f"    Found {len(trunks)} trunks")
+        print(f"    ✓ Found {len(trunks)} trunk registrations")
+        
+        # Show sample
+        if trunks:
+            registered = [t for t in trunks if 'Registered' in t.get('state', '')]
+            print(f"      {len(registered)} registered, {len(trunks) - len(registered)} not registered")
     except Exception as e:
-        print(f"    Warning: Could not fetch trunks: {e}")
+        print(f"    ✗ Warning: Could not fetch trunks: {e}")
     
     # Get queues
     print("  - Fetching queues...")
     try:
         queues = client.get_queues()
         data['queues'] = queues
-        print(f"    Found {len(queues)} queues")
+        print(f"    ✓ Found {len(queues)} queues")
+        
+        # Show sample
+        if queues:
+            with_calls = [q for q in queues if int(q.get('calls', '0')) > 0]
+            if with_calls:
+                print(f"      {len(with_calls)} queues have waiting calls")
     except Exception as e:
-        print(f"    Warning: Could not fetch queues: {e}")
-    
-    # Get IVRs
-    print("  - Fetching IVR menus...")
-    try:
-        ivrs = client.get_ivrs()
-        data['ivrs'] = ivrs
-        print(f"    Found {len(ivrs)} IVR menus")
-    except Exception as e:
-        print(f"    Warning: Could not fetch IVRs: {e}")
-    
-    # Get ring groups
-    print("  - Fetching ring groups...")
-    try:
-        ring_groups = client.get_ring_groups()
-        data['ring_groups'] = ring_groups
-        print(f"    Found {len(ring_groups)} ring groups")
-    except Exception as e:
-        print(f"    Warning: Could not fetch ring groups: {e}")
+        print(f"    ✗ Warning: Could not fetch queues: {e}")
     
     # Get active calls
     print("  - Fetching active calls...")
     try:
         active_calls = client.get_active_calls()
         data['active_calls'] = active_calls
-        print(f"    Found {len(active_calls)} active calls")
+        print(f"    ✓ Found {len(active_calls)} active calls")
+        
+        # Show sample
+        if active_calls:
+            for call in active_calls[:3]:
+                channel = call.get('channel', 'Unknown')
+                state = call.get('state', 'Unknown')
+                print(f"      - {channel}: {state}")
+            if len(active_calls) > 3:
+                print(f"      ... and {len(active_calls) - 3} more")
     except Exception as e:
-        print(f"    Warning: Could not fetch active calls: {e}")
+        print(f"    ✗ Warning: Could not fetch active calls: {e}")
     
     return data
 
 
-def save_cache(data: Dict[str, Any], cache_path: Path) -> None:
-    """Save collected data to cache file."""
-    output_file = cache_path / 'freepbx.json'
-    
-    with open(output_file, 'w') as f:
-        json.dump(data, f, indent=2)
-    
-    print(f"\nCache saved to: {output_file}")
-    print(f"Size: {output_file.stat().st_size / 1024:.1f} KB")
-
-
-def print_summary(data: Dict[str, Any]) -> None:
-    """Print a summary of collected data."""
-    print("\n" + "="*60)
-    print("FreePBX Collection Summary")
-    print("="*60)
-    
-    # System info
-    system_info = data.get('system_info', {})
-    if system_info and system_info.get('version'):
-        print(f"\nAsterisk Version: {system_info['version']}")
-    
-    # Extensions
-    extensions = data.get('extensions', [])
-    print(f"\nExtensions: {len(extensions)}")
-    
-    # Trunks
-    trunks = data.get('trunks', [])
-    print(f"Trunks: {len(trunks)}")
-    
-    # Queues
-    queues = data.get('queues', [])
-    print(f"Queues: {len(queues)}")
-    
-    # IVRs
-    ivrs = data.get('ivrs', [])
-    print(f"IVR Menus: {len(ivrs)}")
-    
-    # Ring Groups
-    ring_groups = data.get('ring_groups', [])
-    print(f"Ring Groups: {len(ring_groups)}")
-    
-    # Active calls
-    active_calls = data.get('active_calls', [])
-    print(f"Active Calls: {len(active_calls)}")
-    if active_calls:
-        print("\n  Current Calls:")
-        for call in active_calls[:3]:
-            caller = call.get('caller', {})
-            connected = call.get('connected', {})
-            caller_num = caller.get('number', 'Unknown')
-            connected_num = connected.get('number', 'Unknown')
-            print(f"    - {caller_num} → {connected_num}")
-        if len(active_calls) > 3:
-            print(f"    ... and {len(active_calls) - 3} more")
-    
-    print("\n" + "="*60)
-
-
 def main():
-    """Main collector entry point."""
-    print("FreePBX Collector (GraphQL API)")
-    print("="*60)
+    """Main collection function."""
+    print("=" * 60)
+    print("FreePBX Collector (AMI)")
+    print("=" * 60)
+    print()
     
-    try:
-        # Load configuration
-        config = load_config()
-        freepbx_config = config.get('freepbx', {})
-        cache_config = config.get('cache', {})
-        
-        url = freepbx_config.get('url')
-        client_id = freepbx_config.get('client_id')
-        client_secret = freepbx_config.get('client_secret')
-        
-        if not all([url, client_id, client_secret]):
-            raise ValueError(
-                "FreePBX URL, client_id, and client_secret must be configured in config.yaml"
-            )
-        
-        # Initialize client
-        print(f"\nConnecting to FreePBX at {url}...")
-        print("Using GraphQL API with OAuth2 authentication...")
-        client = FreePBXClient(
-            url=url,
-            client_id=client_id,
-            client_secret=client_secret,
-            verify_ssl=freepbx_config.get('verify_ssl', False)
-        )
-        
-        # Test connection
-        print("Testing connection...")
-        try:
-            if not client.test_connection():
-                raise ConnectionError("Failed to connect to FreePBX GraphQL API")
-        except Exception as e:
-            print(f"Connection test failed: {e}")
-            import traceback
-            traceback.print_exc()
-            raise ConnectionError(f"Failed to connect to FreePBX API: {e}")
-        
-        print("✓ Connection successful")
-        
-        # Collect data
-        data = collect_freepbx_data(client)
-        
-        # Save to cache
-        cache_dir = ensure_cache_dir(cache_config.get('directory', './cache'))
-        save_cache(data, cache_dir)
-        
-        # Print summary
-        print_summary(data)
-        
-        print("\n✓ Collection complete")
-        return 0
-        
-    except FileNotFoundError as e:
-        print(f"\n✗ Error: {e}", file=sys.stderr)
+    # Load configuration
+    print("Loading configuration...")
+    config = load_config()
+    freepbx_config = config.get('freepbx', {})
+    cache_config = config.get('cache', {})
+    
+    # Validate AMI configuration
+    required_fields = ['ami_host', 'ami_port', 'ami_username', 'ami_password']
+    missing = [f for f in required_fields if f not in freepbx_config]
+    if missing:
+        print(f"✗ Error: Missing required config fields: {', '.join(missing)}")
+        print("  Please update config/config.yaml with AMI credentials")
         return 1
+    
+    ami_host = freepbx_config['ami_host']
+    ami_port = freepbx_config['ami_port']
+    ami_username = freepbx_config['ami_username']
+    ami_password = freepbx_config['ami_password']
+    
+    print(f"  AMI: {ami_host}:{ami_port}")
+    print(f"  Username: {ami_username}")
+    print()
+    
+    # Initialize client
+    print("Connecting to FreePBX AMI...")
+    try:
+        with FreePBXClient(ami_host, ami_port, ami_username, ami_password) as client:
+            print("✓ Connected and authenticated!\n")
+            
+            # Test connection
+            if not client.test_connection():
+                print("✗ Connection test failed")
+                return 1
+            print("✓ Connection test passed\n")
+            
+            # Collect data
+            data = collect_freepbx_data(client)
+            
+            # Save to cache
+            cache_dir = ensure_cache_dir(cache_config.get('directory', './cache'))
+            output_file = cache_dir / 'freepbx.json'
+            
+            print()
+            print(f"Saving data to {output_file}...")
+            with open(output_file, 'w') as f:
+                json.dump(data, f, indent=2)
+            
+            print(f"✓ Data saved successfully!")
+            print()
+            print("=" * 60)
+            print("Summary:")
+            print(f"  Extensions: {len(data['extensions'])}")
+            print(f"  Trunks: {len(data['trunks'])}")
+            print(f"  Queues: {len(data['queues'])}")
+            print(f"  Active Calls: {len(data['active_calls'])}")
+            print("=" * 60)
+            
     except Exception as e:
-        print(f"\n✗ Collection failed: {e}", file=sys.stderr)
+        print(f"✗ Error: {e}")
         import traceback
         traceback.print_exc()
         return 1
+    
+    return 0
 
 
 if __name__ == '__main__':
