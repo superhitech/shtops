@@ -43,8 +43,14 @@ python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 
+# (Recommended) Install the local package + console script
+pip install -e .
+
 # Run a collector
 python -m collectors.librenms.collect
+
+# Show unified status from cached collector outputs
+shtops status
 ```
 
 ## Principles
