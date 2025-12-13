@@ -51,3 +51,15 @@ hudu:
 cache:
   directory: "./cache"
   default_ttl_seconds: 300
+
+# LLM Integration (Intelligence Layer)
+# Enables natural language queries against operational data
+# llm:
+#   enabled: true
+#   provider: "openai"  # Options: openai, anthropic, github
+#   api_key: "$OPENAI_API_KEY"  # Use $ENV_VAR to read from environment
+#   model: "gpt-4"  # or "gpt-3.5-turbo", "claude-3-sonnet", "gpt-4o", etc.
+#   # Optional:
+#   # base_url: "https://api.openai.com/v1"  # Override for custom endpoints
+#   # temperature: 0.7
+#   # max_tokens: 2000

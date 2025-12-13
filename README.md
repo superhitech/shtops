@@ -53,6 +53,21 @@ python -m collectors.librenms.collect
 shtops status
 ```
 
+## Quick Demo
+
+```bash
+# Install dependencies
+pip install -r requirements.txt
+
+# Set up LLM (optional but recommended)
+export OPENAI_API_KEY="sk-..."
+
+# Start dashboard
+python -m dashboard.app
+```
+
+Visit http://localhost:5000 and use the chat panel to ask about your infrastructure.
+
 ## Principles
 
 1. Systems remain fully functional without SHTops
@@ -61,6 +76,11 @@ shtops status
 4. Separate concerns: dashboard, automation, execution
 5. Version control everything
 6. Document as you go
+
+## Documentation
+
+- [VISION.md](./VISION.md) - Strategic vision and principles
+- [docs/LLM_INTEGRATION.md](./docs/LLM_INTEGRATION.md) - Intelligence layer setup
 
 ## License
 
