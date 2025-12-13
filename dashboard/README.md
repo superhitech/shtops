@@ -2,7 +2,15 @@
 
 Flask/FastAPI web UI for unified visibility.
 
-**Status:** Future — build after context layer is solid.
+**Status:** MVP scaffold available.
+
+## Run
+
+```bash
+python -m dashboard.app
+# or
+SHTOPS_CONFIG=./config/config.yaml python -m dashboard.app
+```
 
 ## Planned Features
 

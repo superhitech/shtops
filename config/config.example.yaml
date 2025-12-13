@@ -4,12 +4,16 @@
 librenms:
   url: "https://librenms.example.com"
   api_key: "your-api-key-here"
+  # Optional:
+  verify_ssl: true
 
 proxmox:
   url: "https://proxmox.example.com:8006"
   user: "api@pam"
   token_name: "shtops"
   token_value: "your-token-here"
+  # Optional:
+  verify_ssl: false
 
 freepbx:
   url: "https://pbx.example.com"
@@ -25,10 +29,19 @@ unifi:
   url: "https://unifi.example.com:8443"
   username: "shtops"
   password: "your-password-here"
+  # Optional:
+  site: "default"
+  verify_ssl: true
 
 hudu:
   url: "https://hudu.example.com"
   api_key: "your-api-key-here"
+  verify_ssl: true
+  # Optional (used by scripts/hudu_sync.py scaffold):
+  # company_id: 1
+  # asset_layout_id: 1
+  # asset_name: "SHTops Inventory"
+  # inventory_field_name: "Inventory JSON"
 
 cache:
   directory: "./cache"

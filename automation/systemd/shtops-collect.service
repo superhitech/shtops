@@ -1,0 +1,8 @@
+[Unit]
+Description=SHTops periodic collection
+
+[Service]
+Type=oneshot
+Environment=SHTOPS_CONFIG=/etc/shtops/config.yaml
+ExecStart=/usr/bin/env shtops collect --config /etc/shtops/config.yaml
+Nice=10

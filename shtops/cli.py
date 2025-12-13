@@ -96,8 +96,8 @@ def main(argv: list[str] | None = None) -> int:
     p_collect.add_argument(
         "--systems",
         nargs="+",
-        choices=["librenms", "proxmox", "freepbx"],
-        default=["librenms", "proxmox", "freepbx"],
+        choices=["librenms", "proxmox", "freepbx", "unifi"],
+        default=["librenms", "proxmox", "freepbx", "unifi"],
         help="Which collectors to run (default: all)",
     )
     _add_common_args(p_collect)
