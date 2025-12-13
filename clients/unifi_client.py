@@ -41,16 +41,21 @@ class UniFiClient:
         payload = {"username": self.username, "password": self.password, "rememberMe": True}
 
         # Try (modern, legacy) x (direct, unifi-os proxy).
+        last_exc: Exception | None = None
         for prefix in ("", "/proxy/network"):
             self._prefix = prefix
             for path in ("/api/auth/login", "/api/login"):
                 try:
                     self._request("POST", path, json=payload)
                     return
-                except Exception:
+                except Exception as e:
+                    last_exc = e
                     continue
 
-        raise ConnectionError("UniFi login failed (tried /api/auth/login and /api/login with/without /proxy/network)")
+        details = f": {last_exc}" if last_exc else ""
+        raise ConnectionError(
+            "UniFi login failed (tried /api/auth/login and /api/login with/without /proxy/network)" + details
+        )
 
     def list_sites(self) -> List[Dict[str, Any]]:
         data = self._request("GET", "/api/self/sites")

@@ -32,16 +32,21 @@ unifi:
   # Optional:
   site: "default"
   verify_ssl: true
+  verify_ssl: true
 
 hudu:
   url: "https://hudu.example.com"
   api_key: "your-api-key-here"
   verify_ssl: true
-  # Optional (used by scripts/hudu_sync.py scaffold):
-  # company_id: 1
-  # asset_layout_id: 1
+  # Optional (used by scripts/hudu_sync.py and other triggers):
+  # default_company_id: 1
+  # default_asset_layout_id: 1
   # asset_name: "SHTops Inventory"
   # inventory_field_name: "Inventory JSON"
+  # Map an external company key/name -> Hudu company id
+  # company_map:
+  #   "superht": 123
+  #   "driesen": 177
 
 cache:
   directory: "./cache"

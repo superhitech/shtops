@@ -56,15 +56,19 @@ def main() -> int:
         if not url or not username or not password:
             raise ValueError("unifi.url, unifi.username, unifi.password must be set in config.yaml")
 
-        print(f"\nConnecting to UniFi at {url} (site={site})...")
+        print(f"\nConnecting to UniFi at {url} (site={site}, verify_ssl={verify_ssl})...")
         client = UniFiClient(url=url, username=username, password=password, verify_ssl=verify_ssl)
 
-        if not client.test_connection():
-            raise ConnectionError("Failed to connect/authenticate to UniFi API")
+        try:
+            client.login()
+        except Exception as e:
+            hint = ""
+            msg = str(e).lower()
+            if verify_ssl and ("certificate" in msg or "ssl" in msg or "verify" in msg):
+                hint = " (hint: set unifi.verify_ssl: false if using a self-signed cert)"
+            raise ConnectionError(f"Failed to connect/authenticate to UniFi API: {e}{hint}")
 
-        print("✓ Connection successful")
-
-        client.login()
+        print("✓ Authenticated")
         sites = client.list_sites()
         devices = client.get_devices(site=site)
         health = client.get_health(site=site)
