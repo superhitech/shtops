@@ -363,7 +363,7 @@ def chat():
 
 
 def main() -> int:
-    app.run(host=os.environ.get("SHTOPS_HOST", "127.0.0.1"), port=int(os.environ.get("SHTOPS_PORT", "5000")))
+    app.run(host=os.environ.get("SHTOPS_HOST", "0.0.0.0"), port=int(os.environ.get("SHTOPS_PORT", "5000")))
     return 0
 
 
