@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
-"""
-FreePBX API Diagnostic Tool
+"""DEPRECATED: FreePBX GraphQL API diagnostic tool.
 
-Helps diagnose why your FreePBX GraphQL API has limited queries available
-and explores alternative APIs.
+SHTops uses AMI (Asterisk Manager Interface) as the supported integration.
+GraphQL/OAuth scripts are retained only for historical reference.
 """
 
 import sys
-import json
-import requests
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
-
-from freepbx_client import FreePBXClient
+if __name__ == '__main__':
+    print("This script is deprecated (GraphQL/OAuth path).")
+    print("Use AMI instead:")
+    print("  python3 test_freepbx_ami.py")
+    print("  python3 -m collectors.freepbx.collect")
+    sys.exit(2)
 
 
 def check_graphql_scopes(config):

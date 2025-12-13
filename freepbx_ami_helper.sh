@@ -27,6 +27,31 @@ else
 fi
 
 echo ""
+echo "Step 1b: Checking included manager_*.conf overrides..."
+for f in /etc/asterisk/manager_additional.conf /etc/asterisk/manager_custom.conf; do
+    if [ -f "$f" ]; then
+        echo "✓ Found $(basename "$f")"
+        echo "------------------------------------------------------------"
+        sed -n '1,260p' "$f"
+        echo "------------------------------------------------------------"
+    else
+        echo "- Missing $(basename "$f") (ok)"
+    fi
+done
+
+echo ""
+echo "Step 1c: Checking for duplicate user sections (last one wins)..."
+USER_TO_CHECK="3pXw6N7PhSVI"
+echo "Looking for [$USER_TO_CHECK] in manager files..."
+grep -n "^\[$USER_TO_CHECK\]" /etc/asterisk/manager.conf /etc/asterisk/manager_additional.conf /etc/asterisk/manager_custom.conf 2>/dev/null || true
+echo "Permit lines for [$USER_TO_CHECK] (if present):"
+awk -v u="$USER_TO_CHECK" '
+    $0 ~ "^\\["u"\\]" {in=1; next}
+    in && $0 ~ "^\\[" {in=0}
+    in && $0 ~ /^[[:space:]]*permit[[:space:]]*=/ {print FILENAME ":" NR ":" $0}
+' /etc/asterisk/manager.conf /etc/asterisk/manager_additional.conf /etc/asterisk/manager_custom.conf 2>/dev/null || true
+
+echo ""
 echo "Step 2: Checking if Asterisk is running..."
 if pgrep -x "asterisk" > /dev/null; then
     echo "✓ Asterisk is running"
@@ -54,6 +79,20 @@ asterisk -rx 'manager show users'
 echo "------------------------------------------------------------"
 
 echo ""
+echo "Step 5b: Showing the effective settings for the target user..."
+echo "------------------------------------------------------------"
+asterisk -rx "manager show user ${USER_TO_CHECK}" || true
+echo "------------------------------------------------------------"
+
+echo ""
+echo "Step 5c: Checking what AMI is listening on..."
+if command -v ss &> /dev/null; then
+    ss -lntp | grep ':5038' || true
+else
+    netstat -tlnp | grep 5038 || true
+fi
+
+echo ""
 echo "Step 6: Testing from this server..."
 echo "Attempting connection to 0.0.0.0:5038..."
 if timeout 3 bash -c 'cat < /dev/null > /dev/tcp/0.0.0.0/5038'; then
@@ -75,6 +114,7 @@ echo "Summary"
 echo "============================================================"
 echo "If you see the user '3pXw6N7PhSVI' in the output above,"
 echo "the configuration should be correct."
+echo "Also confirm the 'manager show user' output includes a permit that matches your SHTops host IP."
 echo ""
 echo "Next steps:"
 echo "1. Verify the user exists in 'manager show users'"

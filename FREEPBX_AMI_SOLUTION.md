@@ -114,7 +114,7 @@ Step 5: Getting active calls...
 ### Step 4: Run the Collector
 
 ```bash
-python -m collectors.freepbx.collect
+python3 -m collectors.freepbx.collect
 ```
 
 This will collect all FreePBX data and save it to `cache/freepbx.json`.
@@ -343,7 +343,7 @@ Add to crontab on FreePBX server:
 
 ```bash
 # Collect FreePBX data every 5 minutes
-*/5 * * * * cd /root/shtops && /root/shtops/venv/bin/python -m collectors.freepbx.collect >> /var/log/shtops-freepbx.log 2>&1
+*/5 * * * * cd /root/shtops && /root/shtops/venv/bin/python3 -m collectors.freepbx.collect >> /var/log/shtops-freepbx.log 2>&1
 ```
 
 ## Summary

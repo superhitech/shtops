@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
-"""
-GraphQL Schema Explorer for FreePBX
-This will introspect the GraphQL API to show you what queries are actually available.
+"""DEPRECATED: FreePBX GraphQL schema explorer.
+
+SHTops uses AMI (Asterisk Manager Interface) as the supported integration.
+GraphQL/OAuth scripts are retained only for historical reference.
 """
 
 import sys
-import json
-from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
-
-from freepbx_client import FreePBXClient
+if __name__ == '__main__':
+    print("This script is deprecated (GraphQL/OAuth path).")
+    print("Use AMI instead:")
+    print("  python3 test_freepbx_ami.py")
+    print("  python3 -m collectors.freepbx.collect")
+    sys.exit(2)
 
 
 def explore_schema(client):

@@ -6,6 +6,15 @@ Authentication is failing even though the manager.conf configuration looks corre
 ## Most Likely Cause
 The manager.conf file was updated but **not reloaded** into Asterisk's running configuration.
 
+Another very common cause in FreePBX is **a duplicate user section in** `manager_custom.conf`.
+FreePBX includes files in this order:
+
+- `manager.conf` (auto-generated)
+- `manager_additional.conf`
+- `manager_custom.conf`
+
+If the same AMI username is defined again later (especially in `manager_custom.conf`), the later definition wins and can silently change/remove your `permit` ACLs. The result looks like a bad password, but the real issue is an IP restriction.
+
 ## Solution
 
 ### On the FreePBX Server (192.168.5.24 / pbx.super-ht.com)
@@ -18,7 +27,12 @@ asterisk -rx 'manager reload'
 
 # Verify the user exists
 asterisk -rx 'manager show users'
+
+# Show the effective ACLs for the user (this is the key check)
+asterisk -rx 'manager show user 3pXw6N7PhSVI'
 ```
+
+In the `manager show user` output, confirm the `deny/permit` list includes your SHTops host IP (on this repo it’s `10.10.0.24`).
 
 ### Expected Output
 
@@ -57,6 +71,7 @@ chmod +x freepbx_ami_helper.sh
 
 This will:
 - Show the current configuration
+- Show included override files and whether your user is duplicated
 - Reload AMI
 - Show connected users
 - Verify the port is open
@@ -120,7 +135,8 @@ cat /etc/asterisk/manager_custom.conf
 cat /etc/asterisk/manager_additional.conf
 
 # These files are included by manager.conf
-# If they exist and have conflicting settings, they might override your config
+# If they exist and define the same AMI username again, the later definition wins
+# and can override the permit/deny ACLs.
 ```
 
 ## Common Issues

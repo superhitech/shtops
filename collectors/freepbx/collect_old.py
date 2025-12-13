@@ -1,7 +1,7 @@
-"""FreePBX Collector
+"""DEPRECATED: FreePBX Collector (GraphQL API).
 
-Collects PBX status, extensions, trunks, queues, active calls,
-and system health from FreePBX using GraphQL API.
+SHTops uses AMI (Asterisk Manager Interface) as the supported integration.
+This file is retained only for historical reference.
 """
 
 import json
@@ -193,8 +193,12 @@ def print_summary(data: Dict[str, Any]) -> None:
 
 def main():
     """Main collector entry point."""
-    print("FreePBX Collector (GraphQL API)")
+    print("FreePBX Collector (GraphQL API) - DEPRECATED")
     print("="*60)
+    print("This collector is retired. Use AMI instead:")
+    print("  python3 test_freepbx_ami.py")
+    print("  python3 -m collectors.freepbx.collect")
+    return 2
     
     try:
         # Load configuration

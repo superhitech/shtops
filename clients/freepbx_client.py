@@ -30,10 +30,41 @@ class AMIClient:
         self.timeout = timeout
         self.socket = None
         self.authenticated = False
+        self._action_id = 1
         
         # Connect and authenticate
         self._connect()
         self._authenticate()
+
+    def _next_action_id(self) -> str:
+        action_id = str(self._action_id)
+        self._action_id += 1
+        return action_id
+
+    def _drain_pending(self, max_seconds: float = 0.25) -> None:
+        """Drain any queued AMI events/responses already in the socket.
+
+        Asterisk may emit asynchronous event frames (e.g. FullyBooted) that can
+        arrive between actions. If we don't drain/ignore them, the next
+        read-after-send can consume an event frame and misinterpret it as the
+        action response.
+        """
+        if not self.socket:
+            return
+
+        original_timeout = self.socket.gettimeout()
+        try:
+            self.socket.settimeout(0.0)
+            start = time.time()
+            while time.time() - start < max_seconds:
+                try:
+                    chunk = self.socket.recv(4096)
+                    if not chunk:
+                        break
+                except (BlockingIOError, socket.error):
+                    break
+        finally:
+            self.socket.settimeout(original_timeout)
     
     def _connect(self) -> None:
         """Establish socket connection to AMI."""
@@ -52,7 +83,13 @@ class AMIClient:
     
     def _authenticate(self) -> None:
         """Authenticate with AMI."""
-        action = f"Action: Login\r\nUsername: {self.username}\r\nSecret: {self.password}\r\n\r\n"
+        action_id = self._next_action_id()
+        action = (
+            f"Action: Login\r\n"
+            f"ActionID: {action_id}\r\n"
+            f"Username: {self.username}\r\n"
+            f"Secret: {self.password}\r\n\r\n"
+        )
         self.socket.send(action.encode('utf-8'))
         
         response = self._read_response()
@@ -60,30 +97,36 @@ class AMIClient:
             raise AuthenticationError(f"AMI authentication failed: {response}")
         
         self.authenticated = True
+        # Drain any async events that may arrive right after login.
+        self._drain_pending()
     
-    def _read_response(self) -> str:
-        """Read a complete AMI response."""
+    def _read_response(self, terminator: bytes = b'\r\n\r\n') -> str:
+        """Read a complete AMI response.
+
+        Most AMI responses end with a blank line (double CRLF). Some actions
+        (notably `Command`) can include a larger payload; in those cases a
+        different terminator (e.g. `b'--END COMMAND--'`) is used.
+        """
         response = b''
         start_time = time.time()
-        
+
         while True:
             if time.time() - start_time > self.timeout:
                 raise TimeoutError("Timeout reading AMI response")
-            
+
             try:
                 chunk = self.socket.recv(4096)
                 if not chunk:
                     break
                 response += chunk
-                
-                # AMI responses end with double CRLF
-                if b'\r\n\r\n' in response:
+
+                if terminator in response:
                     break
             except socket.timeout:
                 if response:
                     break
                 raise
-        
+
         return response.decode('utf-8', errors='ignore')
     
     def _send_action(self, action: str, **kwargs) -> Dict[str, Any]:
@@ -97,8 +140,12 @@ class AMIClient:
         Returns:
             Parsed response dictionary
         """
+        # Drain any queued async events before sending a new action.
+        self._drain_pending()
+
         # Build action string
-        action_str = f"Action: {action}\r\n"
+        action_id = self._next_action_id()
+        action_str = f"Action: {action}\r\nActionID: {action_id}\r\n"
         for key, value in kwargs.items():
             action_str += f"{key}: {value}\r\n"
         action_str += "\r\n"
@@ -106,11 +153,23 @@ class AMIClient:
         # Send action
         self.socket.send(action_str.encode('utf-8'))
         
-        # Read response
-        response = self._read_response()
-        
-        # Parse response
-        return self._parse_response(response)
+        # Read response: skip async event frames until we see a Response.
+        start_time = time.time()
+        while True:
+            if time.time() - start_time > self.timeout:
+                raise TimeoutError(f"Timeout waiting for AMI response to action {action}")
+
+            response = self._read_response()
+            if not response.strip():
+                continue
+
+            # If this is an event-only frame, it won't include a Response header.
+            if 'Response:' not in response:
+                continue
+
+            # If ActionID is present, make sure it matches.
+            if f"ActionID: {action_id}" in response or 'ActionID:' not in response:
+                return self._parse_response(response)
     
     def _parse_response(self, response: str) -> Dict[str, Any]:
         """Parse AMI response into structured data."""
@@ -160,15 +219,35 @@ class AMIClient:
         Returns:
             Command output
         """
-        response = self._send_action('Command', Command=cmd)
-        
-        # Command output is in the raw response
-        # Re-read to get full output
-        action_str = f"Action: Command\r\nCommand: {cmd}\r\n\r\n"
+        # `Command` responses are typically `Response: Follows` and terminate with
+        # `--END COMMAND--`. We also normalize output by stripping AMI headers and
+        # the leading `Output: ` prefixes.
+        self._drain_pending()
+        action_id = self._next_action_id()
+        action_str = f"Action: Command\r\nActionID: {action_id}\r\nCommand: {cmd}\r\n\r\n"
         self.socket.send(action_str.encode('utf-8'))
-        output = self._read_response()
-        
-        return output
+
+        raw = self._read_response(terminator=b'--END COMMAND--')
+
+        # If we accidentally captured an async event first (rare), keep reading.
+        if 'Response:' not in raw or (f"ActionID: {action_id}" not in raw and 'ActionID:' in raw):
+            start_time = time.time()
+            while time.time() - start_time <= self.timeout:
+                more = self._read_response(terminator=b'--END COMMAND--')
+                if not more.strip():
+                    continue
+                raw = more
+                if 'Response:' in raw and (f"ActionID: {action_id}" in raw or 'ActionID:' not in raw):
+                    break
+
+        output_lines: List[str] = []
+        for line in raw.split('\r\n'):
+            if line == '--END COMMAND--':
+                break
+            if line.startswith('Output:'):
+                output_lines.append(line.split(':', 1)[1].lstrip())
+
+        return "\n".join(output_lines).rstrip("\n")
     
     def ping(self) -> bool:
         """Test connection to AMI."""
@@ -254,32 +333,41 @@ class FreePBXClient:
         """
         extensions = []
         
-        # Get PJSIP endpoints
+        # Get PJSIP endpoints.
+        # On newer Asterisk versions, `pjsip show endpoints` often produces a
+        # detailed multi-line listing. We only treat `Endpoint:` lines as the
+        # actual endpoint identity.
         pjsip_output = self.ami.command('pjsip show endpoints')
         for line in pjsip_output.split('\n'):
             line = line.strip()
-            if not line or line.startswith('=') or line.startswith('Endpoint') or line.startswith('Object'):
+            if not line:
                 continue
-            
-            parts = line.split()
-            if len(parts) >= 2:
-                endpoint = parts[0].strip()
-                # Skip non-extension entries
-                if '/' in endpoint or endpoint == 'Endpoint:':
+
+            if line.startswith('Endpoint:'):
+                rest = line.split(':', 1)[1].strip()
+                if not rest:
                     continue
-                    
-                status = parts[1] if len(parts) > 1 else 'Unknown'
-                
-                extensions.append({
-                    'extension': endpoint,
-                    'tech': 'PJSIP',
-                    'status': status,
-                    'type': 'endpoint'
-                })
+
+                endpoint_id = rest.split()[0]  # e.g. 100/100
+                # Skip header/table format lines like "<Endpoint...>"
+                if endpoint_id.startswith('<'):
+                    continue
+                extension = endpoint_id.split('/')[0]
+                status = rest[len(endpoint_id):].strip() or 'Unknown'
+
+                if extension and not any(e.get('extension') == extension for e in extensions):
+                    extensions.append({
+                        'extension': extension,
+                        'tech': 'PJSIP',
+                        'status': status,
+                        'type': 'endpoint'
+                    })
         
         # Get SIP peers (legacy)
         try:
             sip_output = self.ami.command('sip show peers')
+            if 'No such command' in sip_output or 'Command not found' in sip_output:
+                return extensions
             for line in sip_output.split('\n'):
                 line = line.strip()
                 if not line or line.startswith('=') or line.startswith('Name/username') or 'sip peers' in line.lower():
@@ -346,30 +434,47 @@ class FreePBXClient:
         """
         trunks = []
         
-        # Get PJSIP registrations
+        # Get PJSIP registrations.
+        # Output format varies by Asterisk version (table vs detailed). Prefer
+        # parsing the first token as the registration id and infer state.
         pjsip_output = self.ami.command('pjsip show registrations')
         for line in pjsip_output.split('\n'):
             line = line.strip()
-            if not line or line.startswith('=') or line.startswith('Objects found'):
+            if not line:
                 continue
-            if 'Registration' in line or '<Registration' in line:
+            if line.startswith('=') or line.startswith('Objects found'):
                 continue
-                
+            if line.startswith('Registration:') or line.startswith('Auth:') or line.startswith('Server URI:'):
+                continue
+            if '<Registration' in line or 'Aor:' in line or 'Transport:' in line:
+                continue
+            if line.lower().startswith('registration') and 'auth' in line.lower():
+                continue
+
             parts = line.split()
-            if len(parts) >= 2:
-                reg_name = parts[0].strip()
-                state = parts[1].strip() if len(parts) > 1 else 'Unknown'
-                
-                trunks.append({
-                    'name': reg_name,
-                    'tech': 'PJSIP',
-                    'state': state,
-                    'type': 'registration'
-                })
+            if not parts:
+                continue
+
+            reg_name = parts[0].strip()
+            # Infer state from tokens when possible
+            state = 'Unknown'
+            for token in parts[1:]:
+                if token in {'Registered', 'Rejected', 'Unregistered', 'AuthFailed', 'Failed'}:
+                    state = token
+                    break
+
+            trunks.append({
+                'name': reg_name,
+                'tech': 'PJSIP',
+                'state': state,
+                'type': 'registration'
+            })
         
         # Get SIP registry
         try:
             sip_output = self.ami.command('sip show registry')
+            if 'No such command' in sip_output or 'Command not found' in sip_output:
+                return trunks
             for line in sip_output.split('\n'):
                 line = line.strip()
                 if not line or line.startswith('=') or 'sip registrations' in line.lower():

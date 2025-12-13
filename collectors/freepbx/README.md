@@ -1,29 +1,19 @@
-# FreePBX Collector
+# FreePBX Collector (AMI)
 
-Pulls PBX status, extensions, trunks, queues, active calls, and system health from FreePBX.
+SHTops uses **AMI (Asterisk Manager Interface)** as the supported integration for FreePBX/Asterisk.
 
-## API Requirements
-
-FreePBX uses REST API with basic authentication. The API is typically available at:
-- `https://your-freepbx/admin/api/api/`
-
-### Enabling API Access
-
-1. **Log into FreePBX Admin Panel**
-2. **Go to:** Settings → Advanced Settings
-3. **Enable REST Apps**: Set to "Yes"
-4. **Set API User**: Create or use admin credentials
-
-Alternatively, use the **API Access** module if installed.
+The older GraphQL/OAuth approach is retired because it is not consistently available across FreePBX builds and provides less operationally useful data.
 
 ## Configuration
 
+Set AMI credentials in `config/config.yaml`:
+
 ```yaml
 freepbx:
-  url: "https://pbx.example.com"
-  username: "admin"
-  password: "your-password-here"
-  verify_ssl: false  # Set to true if using valid SSL cert
+  ami_host: "192.168.5.24"
+  ami_port: 5038
+  ami_username: "your-ami-username"
+  ami_password: "your-ami-password"
 ```
 
 ## Data Collected
@@ -64,19 +54,17 @@ Writes to `cache/freepbx.json`:
 ## Usage
 
 ```bash
-python -m collectors.freepbx.collect
+python3 test_freepbx_ami.py
+python3 -m collectors.freepbx.collect
 ```
 
 ## Common Issues
 
-### 403 Forbidden
-- Ensure REST API is enabled in Advanced Settings
-- Verify user has admin privileges
+### AMI Authentication Failed
+- Confirm the user exists: `asterisk -rx 'manager show users'`
+- Confirm effective ACLs: `asterisk -rx 'manager show user <username>'`
+- Watch for duplicate user sections in `manager_custom.conf` overriding `permit` rules
 
-### Empty Results
-- Some endpoints may return empty arrays if features aren't configured
-- This is normal for unused features (queues, conferences, etc.)
-
-### Connection Errors
-- Verify FreePBX is accessible from your network
-- Check firewall rules for HTTPS access
+### AMI Not Listening / IPv6 Only
+- Verify binding: `ss -lntp | grep 5038`
+- See `FIX_AMI_IPV6_ISSUE.md`

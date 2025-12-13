@@ -1,7 +1,7 @@
-"""FreePBX/Asterisk AMI Client
+"""DEPRECATED: Legacy FreePBX client draft.
 
-Provides a clean Python interface to the Asterisk Manager Interface (AMI).
-AMI provides comprehensive access to all FreePBX/Asterisk data and real-time events.
+This file is not used by the current collectors/tests.
+Use [clients/freepbx_client.py](clients/freepbx_client.py) instead.
 """
 
 import socket
